@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Japanese Multimodal RAG Chat</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .chat-container {
+            height: calc(100vh - 200px);
+        }
+        .message {
+            max-width: 80%;
+            margin-bottom: 1rem;
+        }
+        .user-message {
+            margin-left: auto;
+            background-color: #e6f3ff;
+        }
+        .assistant-message {
+            margin-right: auto;
+            background-color: #f0f2f6;
+        }
+        #preview {
+            max-width: 200px;
+            max-height: 200px;
+            object-fit: contain;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold text-center mb-8">🗾 Japanese Multimodal RAG Chat</h1>
+        
+        <div class="bg-white rounded-lg shadow-lg p-4">
+            <div id="chat-messages" class="chat-container overflow-y-auto mb-4">
+                <!-- Messages will be added here -->
+            </div>
+            
+            <div class="flex flex-col space-y-4">
+                <div class="flex space-x-4">
+                    <textarea id="user-input" 
+                              class="flex-1 p-2 border rounded-lg" 
+                              rows="3" 
+                              placeholder="Type your message here..."></textarea>
+                    <div class="flex flex-col space-y-2">
+                        <label for="image-upload" class="cursor-pointer bg-blue-500 text-white px-4 py-2 rounded-lg text-center">
+                            Upload Image
+                        </label>
+                        <input type="file" id="image-upload" accept="image/*" class="hidden">
+                        <img id="preview" class="hidden rounded-lg">
+                    </div>
+                </div>
+                
+                <button id="send-button" 
+                        class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors">
+                    Send
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const chatMessages = document.getElementById('chat-messages');
+        const userInput = document.getElementById('user-input');
+        const imageUpload = document.getElementById('image-upload');
+        const preview = document.getElementById('preview');
+        const sendButton = document.getElementById('send-button');
+        
+        let currentImage = null;
+        
+        // Handle image upload
+        imageUpload.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.classList.remove('hidden');
+                    currentImage = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        // Add message to chat
+        function addMessage(content, isUser = false, image = null) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message p-4 rounded-lg ${isUser ? 'user-message' : 'assistant-message'}`;
+            
+            if (image) {
+                messageDiv.innerHTML = `
+                    <div class="mb-2">${content}</div>
+                    <img src="${image}" class="max-w-xs rounded-lg">
+                `;
+            } else {
+                messageDiv.textContent = content;
+            }
+            
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        // Send message
+        async function sendMessage() {
+            const message = userInput.value.trim();
+            if (!message) return;
+            
+            // Add user message to chat
+            addMessage(message, true, currentImage);
+            
+            // Clear input and preview
+            userInput.value = '';
+            preview.classList.add('hidden');
+            currentImage = null;
+            imageUpload.value = '';
+            
+            // Disable send button
+            sendButton.disabled = true;
+            sendButton.classList.add('opacity-50');
+            
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        query: message,
+                        image: currentImage
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    addMessage(data.response);
+                } else {
+                    addMessage(`Error: ${data.message}`);
+                }
+            } catch (error) {
+                addMessage(`Error: ${error.message}`);
+            } finally {
+                // Re-enable send button
+                sendButton.disabled = false;
+                sendButton.classList.remove('opacity-50');
+            }
+        }
+        
+        // Event listeners
+        sendButton.addEventListener('click', sendMessage);
+        userInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html> 
